@@ -204,18 +204,20 @@ Animations match the content and the brand. **Get the palette, font, and visual 
 
 **Tool options:**
 
-Pick the engine per animation slot. Do not default to Remotion just because the animation is web-adjacent.
+Pick the engine per animation slot. **HyperFrames is the default** for any web-style animation (UI motion, kinetic typography, data-driven cards, overlays). Use Remotion only when the user explicitly asks for it or an existing Remotion project/brand system is being extended; use Manim or PIL where they fit better (below).
 
-- **HyperFrames** — Browser-native HTML/CSS/GSAP video compositions: product UI motion, website-to-video or mockup-to-video captures, kinetic typography, landing-page/storyboard promos, data-driven UI states, transparent WebM overlays, and clips that need deterministic frame capture plus HyperFrames lint/validate/render checks. Best when the animation should be authored and verified like a web composition instead of a React component tree.
-- **Remotion** — React/CSS compositions with component state, reusable React primitives, or an existing Remotion brand system. Best when the user specifically asks for React/Remotion or when React composition is the simpler authoring model.
+- **HyperFrames** — Browser-native HTML/CSS/GSAP video compositions: product UI motion, website-to-video or mockup-to-video captures, kinetic typography, landing-page/storyboard promos, data-driven UI states, transparent WebM overlays, and clips that need deterministic frame capture plus HyperFrames lint/check/render checks. Best when the animation should be authored and verified like a web composition instead of a React component tree.
+- **Remotion** — React/CSS compositions with component state, reusable React primitives, or an existing Remotion brand system. Use only when the user specifically asks for React/Remotion or an existing Remotion brand system must be extended — not as the default.
 - **Manim** — formal diagrams, state machines, equation derivations, graph morphs. Read `skills/manim-video/SKILL.md` and its references for depth.
 - **PIL + PNG sequence + ffmpeg** — simple overlay cards: counters, typewriter text, single bar reveals, progressive draws. Fast to iterate, any aesthetic you want. The launch video used this.
 
-For HyperFrames slots, scaffold the slot inside `edit/animations/slot_<id>/` with `npx --yes hyperframes init . --example blank --non-interactive --skip-skills`, build the HTML composition there, run the HyperFrames checks that fit the slot (`lint`, `validate`, and a draft render when practical), then produce the final overlay video with `npx --yes hyperframes render . -o render.mp4` or `--format webm -o render.webm` when alpha is required. Point the EDL overlay `file` at the actual rendered path.
+For HyperFrames slots, scaffold the slot inside `edit/animations/slot_<id>/` with `HYPERFRAMES_SKIP_SKILLS=1 npx --yes hyperframes init . --example blank --non-interactive --skip-skills` (the env var is what actually stops `init` from installing standalone skills that duplicate the HyperFrames plugin's — the `--skip-skills` flag is currently ignored by the CLI), build the HTML composition there, run the HyperFrames checks that fit the slot (`lint`, `check`, and a draft render when practical), then produce the final overlay video with `npx --yes hyperframes render . -o render.mp4` or `--format webm -o render.webm` when alpha is required. Point the EDL overlay `file` at the actual rendered path.
 
-For Remotion slots, keep the Remotion project isolated inside the same slot directory, scaffold with `npx create-video@latest` or install Remotion locally there, render the composition to `render.mp4` with the project-local `remotion render` command, and verify duration and dimensions with `ffprobe`.
+**Load the HyperFrames skills before writing any composition.** Use the Skill tool to load `hyperframes:hyperframes-core` (the composition contract: `data-*` timing attributes, `class="clip"`, determinism and seek-safe rules), `hyperframes:hyperframes-animation` (motion rules, GSAP and other runtime adapters, transitions) and `hyperframes:hyperframes-cli` (the init / lint / check / render loop); add `hyperframes:media-use` or `hyperframes:hyperframes-audio` only when the slot needs media sourcing, captions or audio mixing. Names shown are for the Claude Code plugin; a standalone install drops the `hyperframes:` prefix. Do not invoke the router `hyperframes:hyperframes` from a slot: it opens a user-facing intent interview, and the slot has already been planned with the user. If these skills are not installed, say so in the report instead of writing the composition from memory.
 
-None is mandatory. Invent hybrids if useful (e.g., PIL background with a HyperFrames or Remotion layer on top).
+For Remotion slots (only on explicit request), keep the Remotion project isolated inside the same slot directory, scaffold with `npx create-video@latest` or install Remotion locally there, render the composition to `render.mp4` with the project-local `remotion render` command, and verify duration and dimensions with `ffprobe`.
+
+Manim and PIL stay available per slot. Invent hybrids if useful (e.g., PIL background with a HyperFrames layer on top).
 
 **Duration rules of thumb, context-dependent:**
 
@@ -252,7 +254,7 @@ This is one style. If the brand is warm and serif, use that. If it's colorful an
 
 **Fonts fail silently.** A web font that didn't load renders in a fallback face with no error — the video ships in "almost Arial". In HyperFrames/Remotion, await the font load and then assert it: `if (!document.fonts.check('700 76px "Inter"')) throw new Error(...)`. In PIL, pass an explicit font path; never rely on the default.
 
-**Worked example — "show the edit" hook** (a launch video for this tool). Instead of a title card, the first 3s visualize the editing itself: each transcript word pops in on its Scribe timestamp, with bars under it drawn from the real audio envelope; a filler ("ummm") grows letter by letter while it is spoken, turns orange and is cut out on screen at the same frame the audio cuts, and the next line lands immediately. It works because the picture is *driven by the same data as the sound* — one composition (Remotion) reads frame-exact word/envelope JSON produced in Python, so nothing can drift. Use the idea whenever the story is "we removed something": make the removal visible.
+**Worked example — "show the edit" hook** (a launch video for this tool). Instead of a title card, the first 3s visualize the editing itself: each transcript word pops in on its Scribe timestamp, with bars under it drawn from the real audio envelope; a filler ("ummm") grows letter by letter while it is spoken, turns orange and is cut out on screen at the same frame the audio cuts, and the next line lands immediately. It works because the picture is *driven by the same data as the sound* — one composition (HyperFrames) reads frame-exact word/envelope JSON produced in Python, so nothing can drift. Use the idea whenever the story is "we removed something": make the removal visible.
 
 **Parallel sub-agent brief** — each animation is one sub-agent spawned via the `Agent` tool. Each prompt is self-contained (sub-agents have no parent context). Include:
 
@@ -266,6 +268,8 @@ This is one style. If the brand is warm and serif, use that. If it's colorful an
 8. Code pattern reference (copy helpers inline, don't import across slots)
 9. Deliverable checklist (script, render, verify duration via ffprobe, report)
 10. **"Do not ask questions. If anything is ambiguous, pick the most obvious interpretation and proceed."**
+
+For HyperFrames slots, also put in the brief: the skill list from "Load the HyperFrames skills" above (sub-agents don't inherit it), the `HYPERFRAMES_SKIP_SKILLS=1` prefix on `init`, and the requirement to finish with `lint` and `check` clean before rendering.
 
 One sub-agent = one file (unique filenames, parallel agents don't overwrite each other).
 
