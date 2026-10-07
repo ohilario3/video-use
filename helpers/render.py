@@ -93,6 +93,18 @@ def resolve_path(maybe_path: str, base: Path) -> Path:
     return (base / p).resolve()
 
 
+def overlay_input_args(path: Path) -> list[str]:
+    """ffmpeg input args for one overlay clip.
+
+    ffmpeg's native VP9 decoder drops the alpha channel of a transparent WebM,
+    so the overlay would composite as an opaque (black) frame. Force libvpx-vp9,
+    which keeps it.
+    """
+    if path.suffix.lower() == ".webm":
+        return ["-c:v", "libvpx-vp9", "-i", str(path)]
+    return ["-i", str(path)]
+
+
 def resolve_subtitles_path(maybe_path: str, edit_dir: Path) -> Path:
     """Resolve the EDL's subtitles path: relative to the EDL's directory, else the
     current directory (agents often write "edit/master.srt"). A missing file is an
@@ -652,7 +664,7 @@ def build_final_composite(
     inputs: list[str] = ["-i", str(base_path)]
     for ov in overlays:
         ov_path = resolve_path(ov["file"], edit_dir)
-        inputs += ["-i", str(ov_path)]
+        inputs += overlay_input_args(ov_path)
 
     filter_parts: list[str] = []
     # PTS-shift every overlay so its frame 0 lands at start_in_output
