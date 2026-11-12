@@ -1,0 +1,66 @@
+# Mantém este fork em dia com o projeto principal (browser-use/video-use)
+# sem perder os commits do canal.
+#
+#   main     espelho exato do projeto principal. Nunca recebe commit do canal.
+#   hilario  main + os commits do canal (este arquivo é um deles).
+#
+# Toda segunda-feira: traz a main do projeto principal e reaplica os commits
+# do canal por cima (rebase). Se o projeto principal mexeu nas mesmas linhas,
+# o rebase dá conflito, o job FALHA e nada é alterado no fork: resolva à mão
+# (ou peça ao Claude: "atualiza meu video-use").
+name: Sincronizar com o projeto principal
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # segundas, 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hilario
+          fetch-depth: 0
+
+      - name: Buscar o projeto principal
+        run: |
+          git remote add upstream https://github.com/browser-use/video-use.git
+          git fetch upstream main
+          git fetch origin main
+
+      - name: Espelhar a main
+        run: |
+          if git merge-base --is-ancestor origin/main upstream/main; then
+            git push origin upstream/main:refs/heads/main
+          else
+            echo "::error::A main do fork tem commits que o projeto principal não tem. Ela deveria ser só um espelho."
+            exit 1
+          fi
+
+      - name: Reaplicar os commits do canal
+        run: |
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "hilario já está em cima da main atual. Nada a fazer."
+            exit 0
+          fi
+          antes=$(git rev-parse HEAD)
+          # O rebase reescreve o committer: mantém o mesmo do último commit.
+          git config user.name "$(git log -1 --format=%cn)"
+          git config user.email "$(git log -1 --format=%ce)"
+          if ! git rebase upstream/main; then
+            echo "::error::Conflito ao reaplicar os commits do canal. Nada foi alterado no fork."
+            git status --short
+            git rebase --abort
+            exit 1
+          fi
+          git push --force-with-lease=hilario:"$antes" origin HEAD:hilario
+          echo "Commits do canal reaplicados sobre $(git rev-parse --short upstream/main)."
